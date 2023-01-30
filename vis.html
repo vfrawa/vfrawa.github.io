@@ -1,0 +1,217 @@
+<html>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <body>
+        <!--<div id="chart_area"> </div>
+        <div id="vis_checkboxes"></div>></div> -->
+        <div style="width: 100%; overflow: hidden;">
+            <div id="chart_area", style="width: 800px; float: left;"> </div>
+            <div id="vis_checkboxes", style="margin-left: 820px;", style="width: 100px;"> </div>
+       </div>
+    </body>
+
+
+    <script>
+        // Load Data
+        d3.csv("https://vfrawa.github.io/IVIS23_Project_2_data_processed.csv").then(function(data) {
+            console.log(data)
+            for (var i = 0; i < data.length; i++){
+                //console.log(data[i].alias)
+            }
+
+            let width = 800;
+            let height = 600;
+            var chart_area = d3.select("#chart_area");
+            let svg = chart_area.append("svg")
+                .attr("width", width)
+                .attr("height", height);
+            
+            let features = ["infvis","statistics","maths","arts","computer_usage","programming","CG_programming","HCI","UX","communication","collaboration","code_repository"];            
+
+            var checkbox_area = d3.select("#vis_checkboxes")
+            .selectAll('label')
+                .data(data)
+            .enter()
+                .append('label')
+                    .attr('for',function(d,i){ return d.alias; })
+                    .text(function (d) { return d.alias; })
+                .append('input')
+                    .attr("type", "checkbox")
+                    .attr("name", "region")
+                    .attr("class", "region_cb")
+                    .attr("unchecked", "unchecked")
+                    .attr("value", function (d) { return d.alias; }) // corresponding value returned by the button
+                    .attr("id", function(d) { return d.alias; })
+
+
+            datapoint_opacity = Array(data.length).fill(0.0)
+            filtered_data = data;
+            console.log(filtered_data);
+
+
+            let radialScale = d3.scaleLinear()
+                .domain([0, 10])
+                .range([0, 250]);
+            let ticks = [2, 4, 6, 8, 10];
+
+            svg.selectAll("circle")
+                .data(ticks)
+                .join(
+                    enter => enter.append("circle")
+                        .attr("cx", width / 2)
+                        .attr("cy", height / 2)
+                        .attr("fill", "none")
+                        .attr("stroke", "gray")
+                        .attr("r", d => radialScale(d))
+                );
+
+            svg.selectAll(".ticklabel")
+                .data(ticks)
+                .join(
+                    enter => enter.append("text")
+                        .attr("class", "ticklabel")
+                        .attr("x", width / 2 + 5)
+                        .attr("y", d => height / 2 - radialScale(d)-2)
+                        .text(d => d.toString())
+                        .style("font", "14px times")
+                );
+            
+            function angleToCoordinate(angle, value){
+                let x = Math.cos(angle) * radialScale(value);
+                let y = Math.sin(angle) * radialScale(value);
+                return {"x": width / 2 + x, "y": height / 2 - y};
+            }
+
+            let featureData = features.map((f, i) => {
+                let angle = (Math.PI / 2) + (2 * Math.PI * i / features.length);
+                let label_coord = angleToCoordinate(angle, 10.5);
+                if (angle>Math.PI/2 && angle <= 3/2*Math.PI) {
+                    //console.log(f)
+                    //console.log(f.length)
+                    label_coord.x -= 5*f.length;
+                }
+                if (i==4 || i==5) {
+                    label_coord.x -=30
+                }
+
+                return {
+                    "name": f,
+                    "angle": angle,
+                    "line_coord": angleToCoordinate(angle, 10),
+                    "label_coord": label_coord
+                };
+            });
+
+            //console.log(featureData)
+
+            // draw axis line
+            svg.selectAll("line")
+                .data(featureData)
+                .join(
+                    enter => enter.append("line")
+                        .attr("x1", width / 2)
+                        .attr("y1", height / 2)
+                        .attr("x2", d => d.line_coord.x)
+                        .attr("y2", d => d.line_coord.y)
+                        .attr("stroke","black")
+                );
+
+            // draw axis label
+            svg.selectAll(".axislabel")
+                .data(featureData)
+                .join(
+                    enter => enter.append("text")
+                        .attr("x", d => d.label_coord.x)
+                        .attr("y", d => d.label_coord.y)
+                        .text(d => d.name)
+                );
+
+            let line = d3.line()
+                .x(d => d.x)
+                .y(d => d.y);
+
+            //let colors = ["yellow", "darkorange", "gray", "navy", "green"]; //use scaleOrdinal for more than 3 
+            //let colorslist = ["yellow", "darkorange", "gray", "navy", "green"]; //use scaleOrdinal for more than 3 
+            //let colors = []
+            //for (var i = 0; i < 5; i++){
+            //    colors[data[i]["alias"]] = colorslist[i]
+            //}
+            //console.log(colors)
+            
+            
+            //let po = []
+            //po[data[0].alias] = "yellow"
+            //colors.push(data[0].alias)
+            let colors = []
+            for (var i =0; i<data.length; i++) { //TODO: evtl change to filtered_data
+                colors.push(d3.interpolateSpectral(i/data.length))
+            }
+
+            function getPathCoordinates(data_point){
+                let coordinates = [];
+                for (var i = 0; i < features.length; i++){
+                    let ft_name = features[i];
+                    let angle = (Math.PI / 2) + (2 * Math.PI * i / features.length);
+                    coordinates.push(angleToCoordinate(angle, data_point[ft_name]));
+                }
+                return coordinates;
+            }
+
+            function update2() {
+                console.log("went into update2")
+                        // draw the path element
+                //svg.selectAll("path").data(data).exit().remove();
+                svg.selectAll("path")
+                    .data(filtered_data, (d, i) => d.alias)
+                    .join(
+                        enter => {
+                            enter.append("path")
+                            .datum(d => getPathCoordinates(d))
+                            .attr("d", line)
+                            .attr("stroke-width", 3)
+                            .attr("stroke", (_, i) => colors[i])
+                            .attr("fill", (_, i) => colors[i])
+                            .attr("stroke-opacity", 1)
+                            .attr("opacity", (_,i) => datapoint_opacity[i])
+                        },
+                        update => {
+                            update.attr("opacity", (_,i) => datapoint_opacity[i])
+                        }
+                    );
+            }
+
+            update2();
+
+            d3.selectAll(".region_cb").on("change", function () {
+                //stuff happens here
+                var curr_alias = this.value;
+                console.log(curr_alias)
+                var curr_idx = -1;
+                for (var i = 0; i<filtered_data.length; i++) {
+                    if (data[i].alias == curr_alias) {
+                        curr_idx = i;
+                    }
+                }
+                //var list = data.filter(function(datapoint,i){
+                //    if (datapoint.alias == curr_alias) {
+                //        return i
+                //    }
+                //var curr_index = list[0]
+                console.log(curr_idx)
+                if (this.checked) { // adding data points (not quite right yet)
+                    console.log("went into checked")
+                    datapoint_opacity[curr_idx] = 0.5
+                } else { // remove data points from the data that match the filter
+                    console.log("went into unchecked")
+                    datapoint_opacity[curr_idx] = 0
+                }
+                update2();
+            
+            });
+
+
+        })
+
+
+
+    </script>
+</html>
